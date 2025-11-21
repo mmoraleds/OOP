@@ -1,0 +1,204 @@
+package finals;
+
+import java.io.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Scanner;
+
+
+public class FINALS {
+    private static ArrayList<String> AttendanceTracker = new ArrayList<>();
+    private static ArrayList<Employee> employees = new ArrayList<>();
+    // kept your original file path
+    private static final String FILE_NAME = "C:\\Users\\Angela\\OneDrive\\Documents\\NetBeansProjects\\JavaApplication5\\src\\javaapplication5.txt";
+    private static final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        loadTransactions();
+        int choice;
+
+        do {
+            System.out.println("\nMenu System");
+            System.out.println("1. Add New Employee");
+            System.out.println("2. Mark Attendance");
+            System.out.println("3. Exit");
+            System.out.print("Enter your choice: ");
+            // guard against non-int input
+            while (!scanner.hasNextInt()) {
+                System.out.print("Please enter a number (1-3): ");
+                scanner.next();
+            }
+            choice = scanner.nextInt();
+            scanner.nextLine(); 
+
+            switch (choice) {
+                case 1:
+                    newEmployee(scanner);
+                    break;
+                case 2:
+                    mAttendance(scanner);
+                    break;
+                case 3:
+                    System.out.println("Exiting... Goodbye!");
+                    break;
+                default:
+                    System.out.println("Invalid choice. Please try again.");
+            }
+        } while (choice != 3);
+
+        scanner.close();
+    }
+
+    
+    private static void newEmployee(Scanner scanner) {
+        System.out.println("\n--- Add New Employee ---");
+        System.out.print("Enter Employee ID: ");
+        String id = scanner.nextLine().trim();
+
+        
+        if (findEmployeeById(id) != null) {
+            System.out.println("Employee with ID " + id + " already exists.");
+            return;
+        }
+
+        System.out.print("Enter Employee Name: ");
+        String name = scanner.nextLine().trim();
+
+        double salary = 0.0;
+        boolean ok = false;
+        while (!ok) {
+            System.out.print("Enter Salary: ");
+            String salaryStr = scanner.nextLine().trim();
+            try {
+                salary = Double.parseDouble(salaryStr);
+                if (salary < 0) {
+                    System.out.println("Salary cannot be negative.");
+                } else {
+                    ok = true;
+                }
+            } catch (NumberFormatException ex) {
+                System.out.println("Invalid number. Please enter a valid salary.");
+            }
+        }
+
+        Employee e = new Employee(id, name, salary);
+        employees.add(e);
+
+        String transaction = String.format("ADD EMPLOYEE ID: %s | NAME: %s | SALARY: %.2f | %s",
+                id, name, salary, LocalDateTime.now().format(dtf));
+        AttendanceTracker.add(transaction);
+        addTransactionToFile(transaction);
+
+        System.out.println("Employee added successfully: " + e);
+    }
+
+    
+    private static void mAttendance(Scanner scanner) {
+        System.out.println("\n--- Mark Attendance ---");
+        if (employees.isEmpty()) {
+            System.out.println("No employees registered yet. Add employees first.");
+            return;
+        }
+
+        System.out.print("Enter Employee ID to mark attendance: ");
+        String id = scanner.nextLine().trim();
+
+        Employee e = findEmployeeById(id);
+        if (e == null) {
+            System.out.println("Employee ID not found.");
+            return;
+        }
+
+        String timeStamp = LocalDateTime.now().format(dtf);
+        String record = String.format("Attendance - ID: %s | NAME: %s | TIME: %s",
+                e.id, e.name, timeStamp);
+
+        AttendanceTracker.add(record);
+        addTransactionToFile(record);
+
+        System.out.println("Attendance marked for " + e.name + " at " + timeStamp);
+    }
+
+ 
+    private static Employee findEmployeeById(String id) {
+        for (Employee e : employees) {
+            if (e.id.equals(id)) return e;
+        }
+        return null;
+    }
+
+
+    private static void loadTransactions() {
+        File f = new File(FILE_NAME);
+        if (!f.exists()) {
+            try {
+                File parent = f.getParentFile();
+                if (parent != null && !parent.exists()) parent.mkdirs();
+                f.createNewFile();
+            } catch (IOException ex) {
+                System.out.println("Warning: could not create transactions file: " + ex.getMessage());
+                return;
+            }
+        }
+
+        try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (!line.trim().isEmpty()) {
+                    AttendanceTracker.add(line);
+                    
+                    if (line.startsWith("ADD EMPLOYEE ID:")) {
+                        
+                        String[] parts = line.split("\\|");
+                        String idPart = parts.length > 0 ? parts[0] : "";
+                        String namePart = parts.length > 1 ? parts[1] : "";
+                        String salPart = parts.length > 2 ? parts[2] : "";
+
+                        String id = idPart.replace("ADD EMPLOYEE ID:", "").trim();
+                        String name = namePart.replace("NAME:", "").trim();
+                        double sal = 0.0;
+                        try {
+                            sal = Double.parseDouble(salPart.replace("SALARY:", "").trim());
+                        } catch (Exception ignore) {}
+                        if (findEmployeeById(id) == null && !id.isEmpty()) {
+                            employees.add(new Employee(id, name, sal));
+                        }
+                    }
+                }
+            }
+            System.out.println("Loaded " + AttendanceTracker.size() + " previous records.");
+        } catch (IOException ex) {
+            System.out.println("Error reading transactions file: " + ex.getMessage());
+        }
+    }
+
+    
+    private static void addTransactionToFile(String transaction) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(FILE_NAME, true))) {
+            bw.write(transaction);
+            bw.newLine();
+        } catch (IOException ex) {
+            System.out.println("Error writing to transactions file: " + ex.getMessage());
+        }
+    }
+
+    // Simple employee holder
+    private static class Employee {
+        String id;
+        String name;
+        double salary;
+
+        Employee(String id, String name, double salary) {
+            this.id = id;
+            this.name = name;
+            this.salary = salary;
+        }
+
+        @Override
+        public String toString() {
+            return id + " - " + name + " (" + String.format("%.2f", salary) + ")";
+        }
+    }
+}
